@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { AppError, DeploymentResult, DeploymentStatus, TokenDeployParams, TokenInfo } from '../types';
 import { ErrorCode } from '../types';
-import { createError, getErrorMessage } from '../utils/errors';
+import { createError, ErrorHandler, getErrorMessage } from '../utils/errors';
 import {
     isValidDescription,
     isValidImageFile,
@@ -89,6 +89,10 @@ export function useTokenDeploy(network: 'testnet' | 'mainnet') {
                     params.name
                 );
             } catch (uploadError) {
+                ErrorHandler.handle(uploadError instanceof Error ? uploadError : new Error(getErrorMessage(uploadError)), {
+                    action: 'upload-metadata',
+                    feature: 'token-deploy',
+                });
                 const appError = createError(ErrorCode.IPFS_UPLOAD_FAILED, getErrorMessage(uploadError));
                 setError(appError);
                 setStatus('error');
@@ -121,6 +125,15 @@ export function useTokenDeploy(network: 'testnet' | 'mainnet') {
             trackTokenDeployed(params.symbol, network);
             return result;
         } catch (deployError) {
+            ErrorHandler.handle(deployError instanceof Error ? deployError : new Error(getErrorMessage(deployError)), {
+                action: 'deploy-token',
+                feature: 'token-deploy',
+                metadata: {
+                    name: params.name,
+                    symbol: params.symbol,
+                    hasMetadata: Boolean(metadataUri),
+                },
+            });
             const appError = mapDeploymentError(deployError);
             try {
                 analytics.track(AnalyticsEvent.TOKEN_DEPLOY_FAILED, {
