@@ -80,6 +80,7 @@ export const ErrorCode = {
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
+<<<<<<< feat/160-burn-statistics-dashboard
 // Burn Statistics Types
 export interface BurnStats {
     totalBurned: string;
@@ -111,4 +112,52 @@ export interface BurnChartData {
     labels: string[];
     values: number[];
     cumulative: number[];
+=======
+// Recurring Payment Types
+export type RecurringPaymentStatus = 'active' | 'due' | 'paused' | 'cancelled';
+
+export type PaymentInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'custom';
+
+export interface RecurringPayment {
+    id: string;
+    recipient: string;
+    amount: string;
+    tokenAddress: string;
+    tokenSymbol?: string;
+    tokenDecimals?: number;
+    memo?: string;
+    interval: PaymentInterval;
+    intervalSeconds: number;
+    nextPaymentTime: number;
+    lastPaymentTime?: number;
+    paymentCount: number;
+    totalPaid: string;
+    status: RecurringPaymentStatus;
+    createdAt: number;
+    creator: string;
+}
+
+export interface RecurringPaymentHistory {
+    id: string;
+    paymentId: string;
+    transactionHash: string;
+    amount: string;
+    timestamp: number;
+    status: 'success' | 'failed';
+}
+
+export interface CreateRecurringPaymentParams {
+    recipient: string;
+    amount: string;
+    tokenAddress: string;
+    memo?: string;
+    interval: PaymentInterval;
+    customIntervalSeconds?: number;
+}
+
+export interface RecurringPaymentFilters {
+    status?: RecurringPaymentStatus;
+    tokenAddress?: string;
+    search?: string;
+>>>>>>> main
 }
