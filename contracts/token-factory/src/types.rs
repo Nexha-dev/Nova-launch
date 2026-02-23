@@ -43,6 +43,6 @@ pub enum Error {
     TokenNotFound = 4,
     MetadataAlreadySet = 5,
     AlreadyInitialized = 6,
-    BurnAmountExceedsBalance = 7,
-    InvalidBurnAmount = 9,
+    InvalidBurnAmount = 7,
+    BurnAmountExceedsBalance = 8,
 }

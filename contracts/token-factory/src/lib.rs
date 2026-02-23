@@ -3,7 +3,7 @@
 mod storage;
 mod types;
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, Env};
 use types::{Error, FactoryState, TokenInfo};
 
 #[contract]
@@ -84,214 +84,52 @@ impl TokenFactory {
         storage::get_token_info(&env, index).ok_or(Error::TokenNotFound)
     }
 
-    /// Create a new token (Simulated for registry)
-    pub fn create_token(
-        env: Env,
-        creator: Address,
-        name: soroban_sdk::String,
-        symbol: soroban_sdk::String,
-        decimals: u32,
-        initial_supply: i128,
-        metadata_uri: Option<soroban_sdk::String>,
-        fee_paid: i128,
-    ) -> Result<Address, Error> {
-        // Validate fees
-        let base_fee = storage::get_base_fee(&env);
-        let metadata_fee = if metadata_uri.is_some() { storage::get_metadata_fee(&env) } else { 0 };
-        let required_fee = base_fee + metadata_fee;
-
-        if fee_paid < required_fee {
-            return Err(Error::InsufficientFee);
-        }
-
-        // Validate params
-        if initial_supply <= 0 {
-            return Err(Error::InvalidParameters);
-        }
-
-        // In a real implementation, this would deploy a contract
-        // For the simulated registry, we use the current contract address as a placeholder
-        let token_address = env.current_contract_address();
-
-        let info = TokenInfo {
-            address: token_address.clone(),
-            creator,
-            name,
-            symbol,
-            decimals,
-            total_supply: initial_supply,
-            total_burned: 0,
-            metadata_uri,
-            created_at: env.ledger().timestamp(),
-        };
-
-        let index = storage::get_token_count(&env);
-        storage::set_token_info(&env, index, &info);
-        storage::increment_token_count(&env);
-
-        Ok(token_address)
-    }
-
-    /// Update metadata for a token (must not be set already)
-    pub fn set_metadata(
-        env: Env,
-        index: u32,
-        new_metadata_uri: soroban_sdk::String,
-    ) -> Result<(), Error> {
-        let mut info = storage::get_token_info(&env, index).ok_or(Error::TokenNotFound)?;
-
-        if info.metadata_uri.is_some() {
-            return Err(Error::MetadataAlreadySet);
-        }
-
-        info.metadata_uri = Some(new_metadata_uri);
-        storage::set_token_info(&env, index, &info);
-
-        Ok(())
-    }
-
-    /// Burn tokens from the specified address
+    /// Burn tokens from a token holder's balance
+    /// 
+    /// # Arguments
+    /// * `token_address` - The address of the token contract
+    /// * `from` - The address of the token holder burning tokens
+    /// * `amount` - The amount of tokens to burn
+    /// 
+    /// # Errors
+    /// * `InvalidBurnAmount` - If amount is zero or negative
+    /// * `BurnAmountExceedsBalance` - If the holder doesn't have enough tokens
     pub fn burn(
         env: Env,
         token_address: Address,
         from: Address,
         amount: i128,
     ) -> Result<(), Error> {
+        // Require authorization from the token holder
         from.require_auth();
 
+        // Validate amount
         if amount <= 0 {
             return Err(Error::InvalidBurnAmount);
         }
 
-        let count = storage::get_token_count(&env);
-        let mut found = false;
-        
-        for i in 0..count {
-            if let Some(mut info) = storage::get_token_info(&env, i) {
-                if info.address == token_address {
-                    if amount > info.total_supply {
-                        return Err(Error::BurnAmountExceedsBalance);
-                    }
-                    info.total_supply -= amount;
-                    info.total_burned += amount;
-                    storage::set_token_info(&env, i, &info);
-                    found = true;
-                    break;
-                }
-            }
-        }
+        // Get token contract
+        let token = token::Client::new(&env, &token_address);
 
-        if !found {
-            return Err(Error::TokenNotFound);
-        }
-
-        Ok(())
-    }
-
-    /// Admin burn tokens from any address
-    pub fn admin_burn(
-        env: Env,
-        token_address: Address,
-        admin: Address,
-        from: Address,
-        amount: i128,
-    ) -> Result<(), Error> {
-        admin.require_auth();
-
-        if amount <= 0 {
-            return Err(Error::InvalidBurnAmount);
-        }
-
-        let count = storage::get_token_count(&env);
-        let mut found = false;
-        
-        for i in 0..count {
-            if let Some(mut info) = storage::get_token_info(&env, i) {
-                if info.address == token_address {
-                    if admin != info.creator {
-                        return Err(Error::Unauthorized);
-                    }
-                    if amount > info.total_supply {
-                        return Err(Error::BurnAmountExceedsBalance);
-                    }
-                    info.total_supply -= amount;
-                    info.total_burned += amount;
-                    storage::set_token_info(&env, i, &info);
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        if !found {
-            return Err(Error::TokenNotFound);
-        }
-
-        Ok(())
-    }
-
-    /// Batch burn tokens from multiple addresses (gas optimized)
-    pub fn burn_batch(
-        env: Env,
-        token_address: Address,
-        burns: soroban_sdk::Vec<(Address, i128)>,
-    ) -> Result<(), Error> {
-        // Early validation and auth checks
-        let mut total_burned: i128 = 0;
-        
-        for (from, amount) in burns.iter() {
-            from.require_auth();
-            
-            if amount <= 0 {
-                return Err(Error::InvalidBurnAmount);
-            }
-            
-            total_burned = total_burned.checked_add(amount)
-                .ok_or(Error::InvalidParameters)?;
-        }
-        
-        // Single token lookup
-        let count = storage::get_token_count(&env);
-        let mut token_index: Option<u32> = None;
-        
-        for i in 0..count {
-            if let Some(info) = storage::get_token_info(&env, i) {
-                if info.address == token_address {
-                    token_index = Some(i);
-                    break;
-                }
-            }
-        }
-        
-        let index = token_index.ok_or(Error::TokenNotFound)?;
-        let mut info = storage::get_token_info(&env, index).ok_or(Error::TokenNotFound)?;
-        
-        // Validate total doesn't exceed supply
-        if total_burned > info.total_supply {
+        // Check balance
+        let balance = token.balance(&from);
+        if balance < amount {
             return Err(Error::BurnAmountExceedsBalance);
         }
-        
-        // Single storage update
-        info.total_supply -= total_burned;
-        info.total_burned += total_burned;
-        storage::set_token_info(&env, index, &info);
-        
+
+        // Burn tokens (reduce balance and total supply)
+        token.burn(&from, &amount);
+
+        // Update token info
+        storage::update_token_supply(&env, &token_address, -amount);
+
+        // Emit event
+        env.events().publish(
+            (symbol_short!("burn"), token_address.clone()),
+            (from.clone(), amount, env.ledger().timestamp()),
+        );
+
         Ok(())
-    }
-
-    /// Get token info by address
-    pub fn get_token_info_by_address(env: Env, token_address: Address) -> Result<TokenInfo, Error> {
-        let count = storage::get_token_count(&env);
-        
-        for i in 0..count {
-            if let Some(info) = storage::get_token_info(&env, i) {
-                if info.address == token_address {
-                    return Ok(info);
-                }
-            }
-        }
-
-        Err(Error::TokenNotFound)
     }
 }
 
