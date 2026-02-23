@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, contracterror, Address, String};
+use soroban_sdk::{contracterror, contracttype, Address, String};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -18,6 +18,7 @@ pub struct TokenInfo {
     pub symbol: String,
     pub decimals: u32,
     pub total_supply: i128,
+    pub total_burned: i128,
     pub metadata_uri: Option<String>,
     pub created_at: u64,
 }

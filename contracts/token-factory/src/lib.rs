@@ -134,7 +134,31 @@ impl TokenFactory {
 }
 
 #[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
 mod test;
 
 #[cfg(test)]
 mod fuzz_test;
+
+#[cfg(test)]
+mod bench_test;
+
+#[cfg(test)]
+mod supply_conservation_test;
+
+#[cfg(test)]
+mod fee_validation_test;
+
+#[cfg(test)]
+mod atomic_token_creation_test;
+
+#[cfg(test)]
+mod metadata_immutability_test;
+
+#[cfg(test)]
+mod token_registry_test;
+
+#[cfg(test)]
+mod gas_bench_test;
