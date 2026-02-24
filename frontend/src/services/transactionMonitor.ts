@@ -49,7 +49,7 @@ export class TransactionMonitor {
     private sessions: Map<string, MonitoringSession> = new Map();
     private statusCallbacks: Map<string, Set<StatusCallback>> = new Map();
     private errorCallbacks: Map<string, Set<ErrorCallback>> = new Map();
-    private pollTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+    private pollTimers: Map<string, NodeJS.Timeout> = new Map();
     private config: MonitoringConfig;
 
     constructor(config: Partial<MonitoringConfig> = {}) {

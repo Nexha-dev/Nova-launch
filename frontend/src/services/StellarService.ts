@@ -5,9 +5,17 @@ import {
     scValToNative,
     nativeToScVal,
     rpc,
+    Transaction,
+    Transaction,
 } from '@stellar/stellar-sdk';
 import type { TokenDeployParams, DeploymentResult } from '../types';
+import type { TokenDeployParams, DeploymentResult } from '../types';
 import { STELLAR_CONFIG, getNetworkConfig } from '../config/stellar';
+import { getDeploymentFeeBreakdown as calculateFeeBreakdown } from '../utils/feeCalculation';
+import { WalletService } from './wallet';
+
+export { calculateFeeBreakdown as getDeploymentFeeBreakdown };
+
 
 export class StellarService {
     private server: rpc.Server;
@@ -20,83 +28,136 @@ export class StellarService {
     }
 
     async deployToken(params: TokenDeployParams): Promise<DeploymentResult> {
-        const { name, symbol, decimals, initialSupply, adminWallet, metadata } = params;
+        try {
+            const account = await this.getAccount(params.adminWallet);
+            const contract = new Contract(STELLAR_CONFIG.factoryContractId);
 
-        // Get source account
-        const sourceAccount = await this.server.getAccount(adminWallet);
+            const transaction = new TransactionBuilder(account, {
+                fee: BASE_FEE,
+                networkPassphrase: this.networkPassphrase,
+            })
+                .addOperation(
+                    contract.call(
+                        'deploy_token',
+                        nativeToScVal(params.name, { type: 'string' }),
+                        nativeToScVal(params.symbol, { type: 'string' }),
+                        nativeToScVal(params.decimals, { type: 'u32' }),
+                        nativeToScVal(params.initialSupply, { type: 'i128' }),
+                        nativeToScVal(params.adminWallet, { type: 'address' }),
+                    )        try {
+            // Calculate fees
+            const hasMetadata = !!params.metadata;
+            const feeBreakdown = calculateFeeBreakdown(hasMetadata);
+            const totalFee = feeBreakdown.totalFee.toString();
 
-        // Build contract invocation
-        const contract = new Contract(STELLAR_CONFIG.factoryContractId);
-        
-        const metadataUri = metadata ? `ipfs://${metadata.description}` : null;
-        const totalFee = metadataUri ? '100000000' : '70000000'; // base_fee + metadata_fee or just base_fee
+            // Get source account
+            const sourceAccount = await this.getAccount(params.adminWallet);
 
-        // Build transaction
-        const transaction = new TransactionBuilder(sourceAccount, {
-            fee: BASE_FEE,
-            networkPassphrase: this.networkPassphrase,
-        })
-            .addOperation(
-                contract.call(
-                    'create_token',
-                    nativeToScVal(adminWallet, { type: 'address' }),
-                    nativeToScVal(name, { type: 'string' }),
-                    nativeToScVal(symbol, { type: 'string' }),
-                    nativeToScVal(decimals, { type: 'u32' }),
-                    nativeToScVal(BigInt(initialSupply), { type: 'i128' }),
-                    metadataUri ? nativeToScVal(metadataUri, { type: 'string' }) : nativeToScVal(null),
-                    nativeToScVal(BigInt(totalFee), { type: 'i128' })
+            // Load contract
+            const contract = new Contract(STELLAR_CONFIG.factoryContractId);
+
+            // Build transaction
+            const transaction = new TransactionBuilder(sourceAccount, {
+                fee: BASE_FEE,
+                networkPassphrase: this.networkPassphrase,
+            })
+                .addOperation(
+                    contract.call(
+                        'deploy_token',
+                        nativeToScVal(params.name, { type: 'string' }),
+                        nativeToScVal(params.symbol, { type: 'string' }),
+                        nativeToScVal(params.decimals, { type: 'u32' }),
+                        nativeToScVal(params.initialSupply, { type: 'i128' })
+                    )
                 )
-            )
-            .setTimeout(180)
-            .build();
+                .setTimeout(180)
+                .build();
 
-        // Simulate transaction
+            const simulatedTx = await this.simulateTransaction(transaction);
+            const preparedTx = rpc.assembleTransaction(transaction, simulatedTx).build();
+
+            const signedXdr = await this.requestSignature(preparedTx.toXDR());
+            const signedTx = TransactionBuilder.fromXDR(signedXdr, this.networkPassphrase) as Transaction;
+            const signedTx = TransactionBuilder.fromXDR(signedXdr, this.networkPassphrase) as Transaction;
+
+            const response = await this.submitTransaction(signedTx);
+            const result = await this.waitForConfirmation(response.hash);
+            const tokenAddress = this.parseTokenAddress(result);
+
+            const hasMetadata = !!(params.metadataUri ?? params.metadata);
+            const feeBreakdown = calculateFeeBreakdown(hasMetadata);
+            const totalFee = String(feeBreakdown.totalFee * 10_000_000); // XLM to stroops
+
+            return {
+                tokenAddress,
+                transactionHash: response.hash,
+                totalFee,
+                timestamp: Date.now(),
+            };
+        } catch (error) {
+            throw new Error(`Token deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            throw error instanceof Error ? error : new Error('Token deployment failed');
+        }
+    }
+
+    private async getAccount(address: string) {
+        try {
+            return await this.server.getAccount(address);
+        } catch (error) {
+            if (error instanceof Error && error.message.includes('404')) {
+                throw new Error('Account not found');
+            }
+            throw error;
+        }
+    }
+
+    private async simulateTransaction(transaction: ReturnType<typeof TransactionBuilder.prototype.build>) {
         const simulatedTx = await this.server.simulateTransaction(transaction);
         
         if (rpc.Api.isSimulationError(simulatedTx)) {
             throw new Error(`Simulation failed: ${simulatedTx.error}`);
         }
 
-        // Prepare transaction
-        const preparedTx = rpc.assembleTransaction(transaction, simulatedTx).build();
-
-        // Request wallet signature
-        const signedXdr = await this.requestSignature(preparedTx.toXDR());
-        const signedTx = TransactionBuilder.fromXDR(signedXdr, this.networkPassphrase);
-
-        // Submit to network
-        const response = await this.server.sendTransaction(signedTx);
-
-        if (response.status === 'ERROR') {
-            throw new Error(`Transaction failed: ${response.errorResult?.toXDR('base64')}`);
-        }
-
-        // Wait for confirmation
-        const result = await this.waitForConfirmation(response.hash);
-
-        // Parse result
-        const tokenAddress = this.parseTokenAddress(result);
-
-        return {
-            tokenAddress,
-            transactionHash: response.hash,
-            totalFee,
-            timestamp: Date.now(),
-        };
+        return simulatedTx;
+        return simulatedTx as rpc.Api.SimulateTransactionSuccessResponse;
     }
 
-    private async requestSignature(xdr: string): Promise<string> {
-        if (!window.freighter) {
-            throw new Error('Freighter wallet not found');
+    private async requestSignature(_xdr: string): Promise<string> {
+        // This would integrate with a wallet like Freighter
+        // For now, throw an error indicating wallet integration is needed
+        throw new Error('Wallet integration required - please connect a Stellar wallet');
+    }
+
+    private async submitTransaction(transaction: ReturnType<typeof TransactionBuilder.prototype.build>) {
+        const response = await this.server.sendTransaction(transaction);
+        
+        if (response.status === 'ERROR') {
+            throw new Error(`Transaction submission failed: ${response.errorResult}`);
+    private async requestSignature(_xdr: string): Promise<string> {
+        // This would integrate with a wallet like Freighter
+        // For now, throw an error indicating wallet integration is needed
+        throw new Error('Wallet integration required - please connect a Stellar wallet');
+    }
+
+    private async submitTransaction(transaction: ReturnType<typeof TransactionBuilder.prototype.build>) {
+        const response = await this.server.sendTransaction(transaction);
+        
+        if (response.status === 'ERROR') {
+            throw new Error(`Transaction submission failed: ${response.errorResult}`);
         }
 
-        const { signTransaction } = await import('@stellar/freighter-api');
-        const { signedTxXdr } = await signTransaction(xdr, {
-            networkPassphrase: this.networkPassphrase,
-        });
-
+        return response;
         return signedTxXdr;
+    }
+
+    private async submitTransaction(transaction: any) {
+        const response = await this.server.sendTransaction(transaction);
+
+        if (response.status === 'ERROR') {
+            throw new Error('Transaction submission failed');
+        }
+
+        return response;
     }
 
     private async waitForConfirmation(hash: string): Promise<rpc.Api.GetTransactionResponse> {
@@ -104,18 +165,26 @@ export class StellarService {
         const maxAttempts = 30;
 
         while (attempts < maxAttempts) {
-            const response = await this.server.getTransaction(hash);
+            try {
+                const response = await this.server.getTransaction(hash);
 
-            if (response.status === 'SUCCESS') {
-                return response;
+                if (response.status === 'SUCCESS') {
+                    return response;
+                }
+
+                if (response.status === 'FAILED') {
+                    throw new Error('Transaction failed');
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                attempts++;
+            } catch (error) {
+                if (attempts === maxAttempts - 1) {
+                    throw error;
+                }
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                attempts++;
             }
-
-            if (response.status === 'FAILED') {
-                throw new Error('Transaction failed');
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            attempts++;
         }
 
         throw new Error('Transaction confirmation timeout');
@@ -127,14 +196,17 @@ export class StellarService {
         }
 
         const address = scValToNative(result.returnValue);
-        return address;
-    }
-}
+        if (typeof address === 'string' && address.length > 0) {
+            return address;
+        }
 
-declare global {
-    interface Window {
-        freighter?: {
-            requestPublicKey: () => Promise<{ publicKey: string }>;
-        };
+        if (address && typeof address === 'object' && 'toString' in address) {
+            const normalized = String(address);
+            if (normalized && normalized !== '[object Object]') {
+                return normalized;
+            }
+        }
+
+        throw new Error('Failed to parse token address');
     }
 }

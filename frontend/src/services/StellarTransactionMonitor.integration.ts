@@ -4,7 +4,6 @@
  * This file demonstrates how to integrate the TransactionMonitor with the real Stellar API
  */
 
-import * as React from 'react';
 import { TransactionMonitor, TransactionStatusUpdate } from './transactionMonitor';
 import { STELLAR_CONFIG, getNetworkConfig } from '../config/stellar';
 
