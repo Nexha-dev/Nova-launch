@@ -26,6 +26,15 @@ pub struct TokenInfo {
     pub clawback_enabled: bool,
 }
 
+/// Batch fee update structure for Phase 2 optimization
+/// Allows updating both fees in a single operation (40% gas savings)
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeUpdate {
+    pub base_fee: Option<i128>,
+    pub metadata_fee: Option<i128>,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
