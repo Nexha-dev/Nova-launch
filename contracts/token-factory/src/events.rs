@@ -47,7 +47,7 @@
 /// 
 /// Any schema changes require creating a new version (e.g., init_v2).
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, Env, String};
 
 /// Emit initialized event (v1)
 /// 
@@ -92,6 +92,37 @@ pub fn emit_token_registered(env: &Env, token_address: &Address, creator: &Addre
     env.events().publish(
         (symbol_short!("tok_rg_v1"), token_address.clone()),
         (creator,),
+    );
+}
+
+/// Emit token created event with full details
+/// 
+/// **Event Name**: tok_crt
+/// 
+/// **Topics** (indexed):
+/// - Event name: "tok_crt"
+/// - token_address: Address - The newly created token's address
+/// 
+/// **Payload** (non-indexed):
+/// - creator: Address - The token creator
+/// - name: String - Token name
+/// - symbol: String - Token symbol
+/// - decimals: u32 - Decimal places
+/// - initial_supply: i128 - Initial token supply
+/// 
+/// Emitted when a new token is created with full metadata
+pub fn emit_token_created(
+    env: &Env,
+    token_address: &Address,
+    creator: &Address,
+    name: &String,
+    symbol: &String,
+    decimals: u32,
+    initial_supply: i128,
+) {
+    env.events().publish(
+        (symbol_short!("tok_crt"), token_address.clone()),
+        (creator.clone(), name.clone(), symbol.clone(), decimals, initial_supply),
     );
 }
 
@@ -364,10 +395,10 @@ pub fn emit_treasury_policy_updated(env: &Env, daily_cap: i128, allowlist_enable
 /// Emit stream metadata updated event (v1)
 /// 
 /// **Schema Version**: 1
-/// **Event Name**: strm_md_v1
+/// **Event Name**: strm_md
 /// 
 /// **Topics** (indexed):
-/// - Event name: "strm_md_v1"
+/// - Event name: "strm_md"
 /// - stream_id: u32 - The stream ID being updated
 /// 
 /// **Payload** (non-indexed):
@@ -384,7 +415,7 @@ pub fn emit_stream_metadata_updated(
     has_metadata: bool,
 ) {
     env.events().publish(
-        (symbol_short!("strm_md_v1"), stream_id),
+        (symbol_short!("strm_md"), stream_id),
         (updater, has_metadata),
     );
 }
@@ -392,10 +423,10 @@ pub fn emit_stream_metadata_updated(
 /// Emit stream created event (v1)
 /// 
 /// **Schema Version**: 1
-/// **Event Name**: strm_crt_v1
+/// **Event Name**: strm_crt
 /// 
 /// **Topics** (indexed):
-/// - Event name: "strm_crt_v1"
+/// - Event name: "strm_crt"
 /// - stream_id: u32 - The newly created stream ID
 /// 
 /// **Payload** (non-indexed):
@@ -416,7 +447,33 @@ pub fn emit_stream_created(
     has_metadata: bool,
 ) {
     env.events().publish(
-        (symbol_short!("strm_crt_v1"), stream_id),
+        (symbol_short!("strm_crt"), stream_id),
         (creator, recipient, amount, has_metadata),
+    );
+}
+
+
+/// Emit metadata set event
+/// 
+/// **Event Name**: meta_set
+/// 
+/// **Topics** (indexed):
+/// - Event name: "meta_set"
+/// - token_address: Address - The token address
+/// 
+/// **Payload** (non-indexed):
+/// - admin: Address - The admin who set the metadata
+/// - metadata_uri: String - The metadata URI
+/// 
+/// Emitted when token metadata is set
+pub fn emit_metadata_set(
+    env: &Env,
+    token_address: &Address,
+    admin: &Address,
+    metadata_uri: &String,
+) {
+    env.events().publish(
+        (symbol_short!("meta_set"), token_address.clone()),
+        (admin.clone(), metadata_uri.clone()),
     );
 }
