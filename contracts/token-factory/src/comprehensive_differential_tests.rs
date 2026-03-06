@@ -260,7 +260,6 @@ mod comprehensive_differential_tests {
             }
         }
     }
-}
 
     #[test]
     fn test_differential_vesting_large_amounts() {
@@ -303,7 +302,6 @@ mod comprehensive_differential_tests {
             }
         }
     }
-}
 
     #[test]
     fn test_differential_supply_conservation() {
