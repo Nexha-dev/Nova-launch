@@ -24,11 +24,8 @@ mod stream_metadata_update_test;
 #[cfg(test)]
 mod governance_test;
 
-use soroban_sdk::{contract, contractimpl, Address, Env};
-use types::{Error, FactoryState, TokenInfo, TokenStats};
-
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, String};
-use types::{ContractMetadata, Error, FactoryState, TokenInfo};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, String, Vec};
+use types::{ContractMetadata, Error, FactoryState, TokenInfo, TokenStats, TokenCreationParams};
 
 // Contract metadata constants
 const CONTRACT_NAME: &str = "Nova Launch Token Factory";
@@ -36,8 +33,6 @@ const CONTRACT_DESCRIPTION: &str = "No-code token deployment on Stellar";
 const CONTRACT_AUTHOR: &str = "Nova Launch Team";
 const CONTRACT_LICENSE: &str = "MIT";
 const CONTRACT_VERSION: &str = "1.0.0";
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
-use types::{Error, FactoryState, TokenInfo, TokenCreationParams};
 
 #[contract]
 pub struct TokenFactory;
@@ -688,27 +683,7 @@ impl TokenFactory {
     /// assert_eq!(token.symbol, "MTK");
     /// assert_eq!(token.decimals, 7);
     /// ```
-    pub fn get_token_info(env: Env, index: u32) -> Result<TokenInfo, Error> {
-        storage::get_token_info(&env, index).ok_or(Error::TokenNotFound)
-    }
-
     /// Update metadata for a token (must not be set already)
-    pub fn set_metadata(env: Env, index: u32, new_metadata_uri: soroban_sdk::String) -> Result<(), Error> {
-        let mut info = storage::get_token_info(&env, index).ok_or(Error::TokenNotFound)?;
-
-        if storage::is_token_paused(&env, index) {
-            return Err(Error::TokenPaused);
-        }
-
-        if info.metadata_uri.is_some() {
-            return Err(Error::MetadataAlreadySet);
-        }
-        
-        info.metadata_uri = Some(new_metadata_uri);
-        storage::set_token_info(&env, index, &info);
-        Ok(())
-    }
-
     /// Get token information by contract address
     ///
     /// Retrieves complete information about a token using its
@@ -742,64 +717,6 @@ impl TokenFactory {
     /// * `decimals` - Number of decimal places
     /// * `initial_supply` - Initial token supply
     /// * `fee_payment` - Fee amount (must be >= base_fee)
-    ///
-    /// # Errors
-    /// * `Error::ContractPaused` - Contract is paused
-    /// * `Error::InvalidParameters` - Invalid inputs
-    /// * `Error::InsufficientFee` - Fee too low
-    pub fn create_token(
-        env: Env,
-        creator: Address,
-        name: String,
-        symbol: String,
-        decimals: u32,
-        initial_supply: i128,
-        fee_payment: i128,
-    ) -> Result<Address, Error> {
-        creator.require_auth();
-
-        if storage::is_paused(&env) {
-            return Err(Error::ContractPaused);
-        }
-
-        if initial_supply < 0 || decimals > 18 || name.len() == 0 || symbol.len() == 0 {
-            return Err(Error::InvalidParameters);
-        }
-
-        let base_fee = storage::get_base_fee(&env);
-        if fee_payment < base_fee {
-            return Err(Error::InsufficientFee);
-        }
-
-        let token_address = creator.clone();
-        let info = TokenInfo {
-            address: token_address.clone(),
-            creator: creator.clone(),
-            name: name.clone(),
-            symbol: symbol.clone(),
-            decimals,
-            total_supply: initial_supply,
-            initial_supply,
-            max_supply: None,
-            metadata_uri: None,
-            created_at: env.ledger().timestamp(),
-            total_burned: 0,
-            burn_count: 0,
-            clawback_enabled: false,
-        };
-
-        let index = storage::increment_token_count(&env);
-        storage::set_token_info(&env, index, &info);
-        storage::set_token_info_by_address(&env, &token_address, &info);
-
-        env.events().publish(
-            (soroban_sdk::symbol_short!("created"),),
-            (token_address.clone(), creator, name, symbol, decimals, initial_supply)
-        );
-
-        Ok(token_address)
-    }
-
     /// Toggle clawback capability for a token (creator only)
     ///
     /// Allows the token creator to enable or disable clawback functionality.

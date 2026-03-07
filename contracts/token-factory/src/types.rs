@@ -84,8 +84,9 @@ pub struct TokenInfo {
     pub burn_count: u32,
     pub metadata_uri: Option<String>,
     pub created_at: u64,
-    pub is_paused: bool,   // NEW — token-level pause flag
     pub is_paused: bool,
+    pub freeze_enabled: bool,
+    pub clawback_enabled: bool,
 }
 
 /// Compact read-only snapshot of a token's current state.
@@ -179,7 +180,15 @@ pub enum DataKey {
     StreamCount,                    // Total number of streams created
     Stream(u32),                    // Stream info by ID
     StreamByCreator(Address, u32),  // Index streams by creator for pagination
+    TokenStreams(u32),              // Streams for a specific token
+    TokenStreamCount(u32),          // Count of streams for a token
+    NextStreamId,                   // Next stream ID counter
+    // Governance keys
     GovernanceConfig,               // Governance quorum and approval thresholds
+    ProposalCount,                  // Total number of proposals
+    Proposal(u64),                  // Proposal by ID
+    ProposalVote(u64, Address),     // Vote for proposal by voter
+    NextProposalId,                 // Next proposal ID counter
 }
 
 /// Contract error codes
@@ -244,6 +253,29 @@ pub enum Error {
     InvalidMetadataFee = 24,
     InconsistentTokenCount = 25,
     TokenPaused = 26,
+    InvalidTimeWindow = 27,
+    FreezeNotEnabled = 28,
+    ProposalNotFound = 34,
+    ProposalExpired = 39,
+}
+
+/// Vote choice for governance proposals
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VoteChoice {
+    For,
+    Against,
+    Abstain,
+}
+
+/// Action type for governance proposals
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ActionType {
+    UpdateFees,
+    UpdateTreasury,
+    PauseContract,
+    UnpauseContract,
 }
 
 /// Governance configuration
@@ -314,6 +346,24 @@ pub struct PendingChange {
     pub metadata_fee: Option<i128>,
     pub paused: Option<bool>,
     pub treasury: Option<Address>,
+}
+
+/// Governance proposal
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Proposal {
+    pub id: u64,
+    pub proposer: Address,
+    pub action: ActionType,
+    pub description: String,
+    pub created_at: u64,
+    pub voting_ends_at: u64,
+    pub execution_delay: u64,
+    pub votes_for: i128,
+    pub votes_against: i128,
+    pub votes_abstain: i128,
+    pub executed: bool,
+    pub cancelled: bool,
 }
 
 /// Pagination cursor for token queries
