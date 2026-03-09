@@ -245,6 +245,7 @@ pub enum DataKey {
     OwnerVaultCount(Address),
     VaultByCreator(Address, u32),
     CreatorVaultCount(Address),
+    PendingAdmin,
 }
 
 /// Contract error codes

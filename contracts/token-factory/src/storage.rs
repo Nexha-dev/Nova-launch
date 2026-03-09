@@ -29,6 +29,23 @@ pub fn has_admin(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
 }
 
+// Pending admin management (two-step transfer)
+pub fn get_pending_admin(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::PendingAdmin)
+}
+
+pub fn set_pending_admin(env: &Env, admin: &Address) {
+    env.storage().instance().set(&DataKey::PendingAdmin, admin);
+}
+
+pub fn clear_pending_admin(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingAdmin);
+}
+
+pub fn has_pending_admin(env: &Env) -> bool {
+    env.storage().instance().has(&DataKey::PendingAdmin)
+}
+
 // Treasury management
 pub fn get_treasury(env: &Env) -> Address {
     env.storage().instance().get(&DataKey::Treasury).unwrap()

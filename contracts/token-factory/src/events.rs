@@ -165,6 +165,24 @@ pub fn emit_admin_transfer(env: &Env, old_admin: &Address, new_admin: &Address) 
         .publish((symbol_short!("adm_xf_v1"),), (old_admin, new_admin));
 }
 
+/// Emit admin proposed event (v1)
+///
+/// **Schema Version**: 1
+/// **Event Name**: adm_prop_v1
+///
+/// **Topics** (indexed):
+/// - Event name: "adm_prop_v1"
+///
+/// **Payload** (non-indexed):
+/// - current_admin: Address - The current admin proposing the transfer
+/// - proposed_admin: Address - The proposed new admin
+///
+/// **Schema Stability**: This schema is immutable. Any changes require a new version.
+pub fn emit_admin_proposed(env: &Env, current_admin: &Address, proposed_admin: &Address) {
+    env.events()
+        .publish((symbol_short!("adm_prop_v1"),), (current_admin, proposed_admin));
+}
+
 /// Emit pause event (v1)
 ///
 /// **Schema Version**: 1
@@ -522,8 +540,6 @@ pub fn emit_vault_created(
     );
 }
 
-<<<<<<< governance-property-tests
-=======
 /// Emit vault claimed event
 ///
 /// Published when a vault owner claims unlocked tokens.
@@ -546,167 +562,3 @@ pub fn emit_vault_cancelled(
         (actor.clone(), remaining_amount),
     );
 }
-
-/// Emit metadata set event
-/// 
-/// Published when metadata is set for a token
-pub fn emit_metadata_set(
-    env: &Env,
-    token_address: &Address,
-    admin: &Address,
-    metadata_uri: &String,
-) {
-    env.events().publish(
-        (symbol_short!("meta_set"), token_address.clone()),
-        (admin, metadata_uri),
-    );
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// Vault/Stream Events (v1)
-// ═══════════════════════════════════════════════════════════════════════
-
-/// Emit vault/stream created event (v1)
-/// 
-/// **Schema Version**: 1
-/// **Event Name**: vlt_cr_v1
-/// 
-/// **Topics** (indexed):
-/// - Event name: "vlt_cr_v1"
-/// - stream_id: u32 - The unique identifier for the created stream
-/// 
-/// **Payload** (non-indexed):
-/// - creator: Address - The address that created the stream
-/// - recipient: Address - The address that will receive the vested tokens
-/// - amount: i128 - Total amount of tokens to be vested
-/// - has_metadata: bool - Whether metadata was provided
-/// 
-/// **Schema Stability**: This schema is immutable. Any changes require a new version.
-/// 
-/// Emitted when a new vesting stream is created
-pub fn emit_stream_created(
-    env: &Env,
-    stream_id: u32,
-    creator: &Address,
-    recipient: &Address,
-    amount: i128,
-    has_metadata: bool,
-) {
-    env.events().publish(
-        (symbol_short!("vlt_cr_v1"), stream_id),
-        (creator, recipient, amount, has_metadata),
-    );
-}
-
-/// Emit vault/stream funded event (v1)
-/// 
-/// **Schema Version**: 1
-/// **Event Name**: vlt_fd_v1
-/// 
-/// **Topics** (indexed):
-/// - Event name: "vlt_fd_v1"
-/// - stream_id: u32 - The stream identifier
-/// 
-/// **Payload** (non-indexed):
-/// - funder: Address - The address that funded the stream
-/// - amount: i128 - Amount of tokens funded
-/// 
-/// **Schema Stability**: This schema is immutable. Any changes require a new version.
-/// 
-/// Emitted when a stream is funded with tokens
-pub fn emit_stream_funded(
-    env: &Env,
-    stream_id: u32,
-    funder: &Address,
-    amount: i128,
-) {
-    env.events().publish(
-        (symbol_short!("vlt_fd_v1"), stream_id),
-        (funder, amount),
-    );
-}
-
-/// Emit vault/stream claimed event (v1)
-/// 
-/// **Schema Version**: 1
-/// **Event Name**: vlt_cl_v1
-/// 
-/// **Topics** (indexed):
-/// - Event name: "vlt_cl_v1"
-/// - stream_id: u32 - The stream identifier
-/// 
-/// **Payload** (non-indexed):
-/// - recipient: Address - The address that claimed tokens
-/// - amount: i128 - Amount of tokens claimed
-/// 
-/// **Schema Stability**: This schema is immutable. Any changes require a new version.
-/// 
-/// Emitted when tokens are claimed from a stream
-pub fn emit_stream_claimed(
-    env: &Env,
-    stream_id: u32,
-    recipient: &Address,
-    amount: i128,
-) {
-    env.events().publish(
-        (symbol_short!("vlt_cl_v1"), stream_id),
-        (recipient, amount),
-    );
-}
-
-/// Emit vault/stream cancelled event (v1)
-/// 
-/// **Schema Version**: 1
-/// **Event Name**: vlt_cn_v1
-/// 
-/// **Topics** (indexed):
-/// - Event name: "vlt_cn_v1"
-/// - stream_id: u32 - The stream identifier
-/// 
-/// **Payload** (non-indexed):
-/// - canceller: Address - The address that cancelled the stream
-/// - remaining_amount: i128 - Amount of unvested tokens returned
-/// 
-/// **Schema Stability**: This schema is immutable. Any changes require a new version.
-/// 
-/// Emitted when a stream is cancelled before completion
-pub fn emit_stream_cancelled(
-    env: &Env,
-    stream_id: u32,
-    canceller: &Address,
-    remaining_amount: i128,
-) {
-    env.events().publish(
-        (symbol_short!("vlt_cn_v1"), stream_id),
-        (canceller, remaining_amount),
-    );
-}
-
-/// Emit stream metadata updated event (v1)
-/// 
-/// **Schema Version**: 1
-/// **Event Name**: vlt_md_v1
-/// 
-/// **Topics** (indexed):
-/// - Event name: "vlt_md_v1"
-/// - stream_id: u32 - The stream identifier
-/// 
-/// **Payload** (non-indexed):
-/// - updater: Address - The address that updated the metadata
-/// - has_metadata: bool - Whether metadata is now present
-/// 
-/// **Schema Stability**: This schema is immutable. Any changes require a new version.
-/// 
-/// Emitted when stream metadata is updated
-pub fn emit_stream_metadata_updated(
-    env: &Env,
-    stream_id: u32,
-    updater: &Address,
-    has_metadata: bool,
-) {
-    env.events().publish(
-        (symbol_short!("vlt_md_v1"), stream_id),
-        (updater, has_metadata),
-    );
-}
->>>>>>> main
