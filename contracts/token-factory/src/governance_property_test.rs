@@ -7,7 +7,7 @@
 //! - Terminal state permanence: executed/cancelled proposals cannot be modified
 
 use super::*;
-use crate::timelock::{create_proposal, vote_proposal, get_proposal, get_vote_counts};
+use crate::timelock;
 use crate::types::{VoteChoice, ActionType};
 use crate::test_helpers::TestEnv;
 use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Bytes};
@@ -36,7 +36,7 @@ mod property_tests {
         ) {
             let test_env = TestEnv::with_timelock(1000);
             
-            let proposal_id = create_proposal(
+            let proposal_id = timelock::create_proposal(
                 &test_env.env,
                 &test_env.admin,
                 ActionType::FeeChange,
@@ -48,9 +48,9 @@ mod property_tests {
             
             test_env.env.ledger().set_timestamp(test_env.env.ledger().timestamp() + 1100);
             
-            let mut prev_for = 0u32;
-            let mut prev_against = 0u32;
-            let mut prev_abstain = 0u32;
+            let mut prev_for = 0i128;
+            let mut prev_against = 0i128;
+            let mut prev_abstain = 0i128;
             
             for i in 0..num_voters.min(vote_choices.len()) {
                 let voter = Address::generate(&test_env.env);
@@ -60,8 +60,12 @@ mod property_tests {
                     _ => VoteChoice::Abstain,
                 };
                 
-                let _ = vote_proposal(&test_env.env, &voter, proposal_id, choice);
-                let (votes_for, votes_against, votes_abstain) = get_vote_counts(&test_env.env, proposal_id).unwrap();
+                let _ = test_env.env.as_contract(&test_env.env.current_contract_address(), || {
+                    timelock::vote_proposal(&test_env.env, &voter, proposal_id, choice)
+                });
+                let (votes_for, votes_against, votes_abstain) = test_env.env.as_contract(&test_env.env.current_contract_address(), || {
+                    timelock::get_vote_counts(&test_env.env, proposal_id)
+                }).unwrap();
                 
                 prop_assert!(votes_for >= prev_for);
                 prop_assert!(votes_against >= prev_against);
@@ -81,7 +85,7 @@ mod property_tests {
         ) {
             let test_env = TestEnv::with_timelock(1000);
             
-            let proposal_id = create_proposal(
+            let proposal_id = timelock::create_proposal(
                 &test_env.env,
                 &test_env.admin,
                 ActionType::FeeChange,
@@ -105,11 +109,11 @@ mod property_tests {
                     _ => VoteChoice::Abstain,
                 };
                 
-                let result = vote_proposal(&test_env.env, &voter, proposal_id, choice);
+                let result = timelock::vote_proposal(&test_env.env, &voter, proposal_id, choice);
                 prop_assert!(result.is_ok());
             }
             
-            let (first_for, first_against, first_abstain) = get_vote_counts(&test_env.env, proposal_id).unwrap();
+            let (first_for, first_against, first_abstain) = timelock::get_vote_counts(&test_env.env, proposal_id).unwrap();
             
             for i in 0..voters.len().min(second_votes.len() as u32) {
                 let voter = voters.get(i).unwrap();
@@ -119,11 +123,11 @@ mod property_tests {
                     _ => VoteChoice::Abstain,
                 };
                 
-                let result = vote_proposal(&test_env.env, &voter, proposal_id, choice);
+                let result = timelock::vote_proposal(&test_env.env, &voter, proposal_id, choice);
                 prop_assert!(result.is_err());
             }
             
-            let (final_for, final_against, final_abstain) = get_vote_counts(&test_env.env, proposal_id).unwrap();
+            let (final_for, final_against, final_abstain) = timelock::get_vote_counts(&test_env.env, proposal_id).unwrap();
             prop_assert_eq!(first_for, final_for);
             prop_assert_eq!(first_against, final_against);
             prop_assert_eq!(first_abstain, final_abstain);
@@ -140,7 +144,7 @@ mod property_tests {
             let end_time = start_time + 10000;
             let eta = end_time + 5000;
             
-            let proposal_id = create_proposal(
+            let proposal_id = timelock::create_proposal(
                 &test_env.env,
                 &test_env.admin,
                 ActionType::FeeChange,
@@ -155,22 +159,22 @@ mod property_tests {
                 
                 for _ in 0..num_votes {
                     let voter = Address::generate(&test_env.env);
-                    let _ = vote_proposal(&test_env.env, &voter, proposal_id, VoteChoice::For);
+                    let _ = timelock::vote_proposal(&test_env.env, &voter, proposal_id, VoteChoice::For);
                 }
             }
             
             test_env.env.ledger().set_timestamp(start_time + time_advance);
             
             let current_time = test_env.env.ledger().timestamp();
-            let _proposal = get_proposal(&test_env.env, proposal_id).unwrap();
+            let _proposal = timelock::get_proposal(&test_env.env, proposal_id).unwrap();
             
             if current_time < start_time {
                 let test_voter = Address::generate(&test_env.env);
-                let result = vote_proposal(&test_env.env, &test_voter, proposal_id, VoteChoice::For);
+                let result = timelock::vote_proposal(&test_env.env, &test_voter, proposal_id, VoteChoice::For);
                 prop_assert!(result.is_err());
             } else if current_time >= end_time {
                 let test_voter = Address::generate(&test_env.env);
-                let result = vote_proposal(&test_env.env, &test_voter, proposal_id, VoteChoice::For);
+                let result = timelock::vote_proposal(&test_env.env, &test_voter, proposal_id, VoteChoice::For);
                 prop_assert!(result.is_err());
             }
         }
@@ -186,7 +190,7 @@ mod property_tests {
             let end_time = start_time + 5000;
             let eta = end_time + 1000;
             
-            let proposal_id = create_proposal(
+            let proposal_id = timelock::create_proposal(
                 &test_env.env,
                 &test_env.admin,
                 ActionType::FeeChange,
@@ -200,20 +204,20 @@ mod property_tests {
             
             for _ in 0..initial_votes {
                 let voter = Address::generate(&test_env.env);
-                let _ = vote_proposal(&test_env.env, &voter, proposal_id, VoteChoice::For);
+                let _ = timelock::vote_proposal(&test_env.env, &voter, proposal_id, VoteChoice::For);
             }
             
-            let (votes_before, _, _) = get_vote_counts(&test_env.env, proposal_id).unwrap();
+            let (votes_before, _, _) = timelock::get_vote_counts(&test_env.env, proposal_id).unwrap();
             
             test_env.env.ledger().set_timestamp(end_time + 100);
             
             for _ in 0..post_execution_votes {
                 let voter = Address::generate(&test_env.env);
-                let result = vote_proposal(&test_env.env, &voter, proposal_id, VoteChoice::For);
+                let result = timelock::vote_proposal(&test_env.env, &voter, proposal_id, VoteChoice::For);
                 prop_assert!(result.is_err());
             }
             
-            let (votes_after, _, _) = get_vote_counts(&test_env.env, proposal_id).unwrap();
+            let (votes_after, _, _) = timelock::get_vote_counts(&test_env.env, proposal_id).unwrap();
             prop_assert_eq!(votes_before, votes_after);
         }
 
@@ -225,7 +229,7 @@ mod property_tests {
             
             let start_time = test_env.env.ledger().timestamp() + 1000;
             
-            let proposal_id = create_proposal(
+            let proposal_id = timelock::create_proposal(
                 &test_env.env,
                 &test_env.admin,
                 ActionType::FeeChange,
@@ -235,9 +239,9 @@ mod property_tests {
                 start_time + 60000,
             ).unwrap();
             
-            let mut expected_for = 0u32;
-            let mut expected_against = 0u32;
-            let mut expected_abstain = 0u32;
+            let mut expected_for = 0i128;
+            let mut expected_against = 0i128;
+            let mut expected_abstain = 0i128;
             
             for (choice_byte, time_offset) in votes {
                 test_env.env.ledger().set_timestamp(start_time + time_offset);
@@ -258,10 +262,10 @@ mod property_tests {
                     },
                 };
                 
-                let result = vote_proposal(&test_env.env, &voter, proposal_id, choice);
+                let result = timelock::vote_proposal(&test_env.env, &voter, proposal_id, choice);
                 
                 if result.is_ok() {
-                    let (votes_for, votes_against, votes_abstain) = get_vote_counts(&test_env.env, proposal_id).unwrap();
+                    let (votes_for, votes_against, votes_abstain) = timelock::get_vote_counts(&test_env.env, proposal_id).unwrap();
                     let total = votes_for + votes_against + votes_abstain;
                     let expected_total = expected_for + expected_against + expected_abstain;
                     
