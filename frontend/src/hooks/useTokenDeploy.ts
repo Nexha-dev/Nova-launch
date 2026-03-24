@@ -10,9 +10,12 @@ import {
 import { IPFSService, isValidIpfsUri } from '../services/IPFSService';
 import { StellarService } from '../services/stellar.service';
 import { TransactionHistoryStorage } from '../services/TransactionHistoryStorage';
+import { IPFSService } from '../services/IPFSService';
+import { StellarService } from '../services/stellar.service';
 import { getDeploymentFeeBreakdown } from '../utils/feeCalculation';
 import { analytics, AnalyticsEvent } from '../services/analytics';
 import { useAnalytics } from './useAnalytics';
+import { transactionHistoryStorage } from '../services/TransactionHistoryStorage';
 
 const STATUS_MESSAGES: Record<DeploymentStatus, string> = {
     idle: '',
@@ -131,6 +134,32 @@ export function useTokenDeploy(network: 'testnet' | 'mainnet', options: UseToken
         }
 
         setStatus('deploying');
+        
+        // Check if factory is paused before attempting deployment
+        try {
+            const isPaused = await stellarService.isPaused();
+            if (isPaused) {
+                const appError = createError(
+                    ErrorCode.CONTRACT_ERROR,
+                    'Protocol is currently paused for maintenance',
+                    `The factory contract on ${network} is paused. Please try again later or contact support.`
+                );
+                setError(appError);
+                setStatus('error');
+                try {
+                    analytics.track(AnalyticsEvent.TOKEN_DEPLOY_FAILED, {
+                        network,
+                        errorCode: appError.code,
+                        reason: 'protocol_paused',
+                    });
+                } catch {}
+                throw appError;
+            }
+        } catch (pauseCheckError) {
+            // If pause check fails, log but continue (fail open to avoid blocking users)
+            console.warn('Failed to check pause state, continuing with deployment:', pauseCheckError);
+        }
+
         try {
             const feeBreakdown = getDeploymentFeeBreakdown(Boolean(metadataUri), baseFee, metadataFee);
             const feePayment = BigInt(Math.round(feeBreakdown.totalFee * 10_000_000));
@@ -155,7 +184,11 @@ export function useTokenDeploy(network: 'testnet' | 'mainnet', options: UseToken
                     decimals: params.decimals || 0,
                 });
             } catch {}
+            
+            // Save optimistic record to local storage
+            // Backend sync will happen via useTransactionHistory
             saveDeploymentRecord(params, result, metadataUri);
+            
             setStatus('success');
             trackTokenDeployed(params.symbol, network);
             return result;
@@ -229,6 +262,10 @@ export function useTokenDeploy(network: 'testnet' | 'mainnet', options: UseToken
     };
 }
 
+/**
+ * Save deployment record to local storage (optimistic update)
+ * Backend sync will reconcile this later
+ */
 function saveDeploymentRecord(
     params: TokenDeployParams,
     result: DeploymentResult,
@@ -251,6 +288,8 @@ function saveDeploymentRecord(
     } catch {
         // Storage quota exceeded — non-fatal, deployment already succeeded
     }
+    // Use the new TransactionHistoryStorage service
+    transactionHistoryStorage.addToken(params.adminWallet, token);
 }
 
 function mapDeploymentError(error: unknown): AppError {
