@@ -19,6 +19,7 @@ import CampaignDashboard, {
   projectContractCampaignToBackend,
 } from '../../app/dashboard/CampaignDashboard';
 import { CampaignService } from '../../services/campaignService';
+import type { StellarService } from '../../services/stellar.service';
 
 // ── Deterministic fixtures ────────────────────────────────────────────────────
 
@@ -173,16 +174,13 @@ function num(value: number): string {
   return value.toLocaleString('en-US');
 }
 
-// ── CampaignService mock ──────────────────────────────────────────────────────
+// ── CampaignService mock via constructor injection ────────────────────────────
 
-vi.mock('../../services/stellar.service', () => ({
-  StellarService: vi.fn().mockImplementation(() => ({
-    createBuybackCampaign: vi.fn().mockResolvedValue({
-      txHash: TX_HASH_CREATE,
-      campaignId: CAMPAIGN_ID,
-    }),
-  })),
-}));
+function makeMockStellar(txHash: string, campaignId: string): StellarService {
+  return {
+    createBuybackCampaign: vi.fn().mockResolvedValue({ txHash, campaignId }),
+  } as unknown as StellarService;
+}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -195,7 +193,7 @@ describe('Campaign Lifecycle E2E', () => {
 
   describe('Phase 1: Campaign Creation', () => {
     it('createCampaign returns a real tx hash and campaign ID', async () => {
-      const service = new CampaignService('testnet');
+      const service = new CampaignService('testnet', makeMockStellar(TX_HASH_CREATE, CAMPAIGN_ID));
       const result = await service.createCampaign({
         title: 'Buyback Lifecycle Campaign',
         description: 'Full lifecycle integration test campaign',
@@ -217,7 +215,7 @@ describe('Campaign Lifecycle E2E', () => {
     });
 
     it('creation tx hash is stable across projection layers', async () => {
-      const service = new CampaignService('testnet');
+      const service = new CampaignService('testnet', makeMockStellar(TX_HASH_CREATE, CAMPAIGN_ID));
       const result = await service.createCampaign({
         title: 'Buyback Lifecycle Campaign',
         description: 'Full lifecycle integration test campaign',

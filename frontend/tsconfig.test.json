@@ -1,8 +1,18 @@
 {
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
-    "composite": false,
+    "composite": true,
+    "noEmit": false,
+    "outDir": "./node_modules/.tmp/test-out",
     "types": ["vitest/globals", "@testing-library/jest-dom", "node"]
   },
-  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**/*.ts", "src/test/**/*.tsx"]
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/test/**/*.ts",
+    "src/test/**/*.tsx"
+  ],
+  "exclude": []
 }
