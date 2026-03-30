@@ -1,0 +1,41 @@
+test: add vault status lifecycle integration
+
+Implements issue-745: Add integration test for vault status lifecycle
+
+This commit adds comprehensive integration tests verifying the complete
+vault lifecycle covering all status transitions and ensuring irreversibility
+of terminal states (CLAIMED and CANCELLED).
+
+Changes:
+- Add vaultStatusLifecycle.integration.test.ts with full lifecycle coverage
+- Add VAULT_STATUS_LIFECYCLE.md documentation with lifecycle diagram
+- Test Active → Claimed path with irreversibility checks
+- Test Active → Cancelled path with irreversibility checks
+- Verify terminal states cannot transition to any other state
+- Document security implications and attack vectors prevented
+
+Test Coverage:
+✓ CREATED → CLAIMED transition
+✓ CREATED → CANCELLED transition
+✓ CLAIMED state irreversibility (cannot claim or cancel again)
+✓ CANCELLED state irreversibility (cannot claim or cancel again)
+✓ Multiple vaults with independent lifecycles
+✓ State consistency across database operations
+
+The lifecycle diagram:
+```
+    CREATED (Active)
+         |
+         ├─── claim() ──→ CLAIMED (irreversible)
+         |
+         └─── cancel() ─→ CANCELLED (irreversible)
+```
+
+Why irreversibility matters:
+1. Prevents double-spending attacks
+2. Ensures fund safety
+3. Maintains clear audit trail
+4. Simplifies state reasoning
+5. Ensures contract consistency
+
+Issue: issue-745
